@@ -24,5 +24,8 @@ RUN pip install --no-cache-dir .
 # Copy source code after dependencies are installed
 COPY src/ ./src/
 
-# Default command
-CMD ["python", "src/train.py"]
+# Install the package in editable mode to ensure it's in the python path and dependencies are linked if needed
+RUN pip install --no-deps -e .
+
+# Default command using module execution to resolve imports correctly
+CMD ["python", "-m", "src.train"]
