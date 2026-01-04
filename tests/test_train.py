@@ -100,9 +100,7 @@ def test_compute_loss_internal():
     args.fsdp = []
     args.fsdp_config = {"xla": False, "xla_fsdp_v2": False}
 
-    trainer = DiTTrainer(
-        model=model, args=args, train_dataset=None, eval_dataset=None
-    )
+    trainer = DiTTrainer(model=model, args=args, train_dataset=None, eval_dataset=None)
 
     inputs = {
         "pixel_values": torch.randn(2, 3, 224, 224),
