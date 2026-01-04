@@ -53,7 +53,7 @@ def test_data_arguments_defaults(data_args):
 
 def test_training_arguments_defaults(training_args):
     """Test default values for TrainingArguments."""
-    assert training_args.output_dir == "./checkpoints"
+    assert training_args.output_dir == "models/checkpoints"
     assert training_args.learning_rate == 1e-4
     assert training_args.per_device_train_batch_size == 8
     assert training_args.num_train_epochs == 3
