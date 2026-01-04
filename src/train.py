@@ -5,6 +5,7 @@ from typing import Any, Dict, Union
 import torch
 import torch.nn.functional as F
 import transformers
+from huggingface_hub import snapshot_download
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModel  # Use AutoModel for custom architectures
 from transformers import (
@@ -15,7 +16,6 @@ from transformers import TrainingArguments as HFTrainingArguments
 from transformers import (
     set_seed,
 )
-from huggingface_hub import snapshot_download
 
 from src.config import ActionSchema, DataArguments, ModelArguments, TrainingArguments
 from src.data import SlidingWindowDataset, UniversalVectorProcessor
