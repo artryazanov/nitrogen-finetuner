@@ -12,11 +12,14 @@ RUN apt-get update && apt-get install -y \
 
 # Copy project files
 COPY pyproject.toml .
+# We copy README.md just in case it's needed for installation, though usually pyproject.toml is enough
 COPY README.md .
-COPY src/ ./src/
 
-# Install python dependencies
+# Install python dependencies first to leverage caching
 RUN pip install --no-cache-dir .
+
+# Copy source code after dependencies are installed
+COPY src/ ./src/
 
 # Default command
 CMD ["python", "src/train.py"]
