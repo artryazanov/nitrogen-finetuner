@@ -41,7 +41,7 @@ class DataArguments:
 
 @dataclass
 class TrainingArguments:
-    output_dir: str = field(default="./checkpoints")
+    output_dir: str = field(default="models/checkpoints")
     learning_rate: float = field(default=1e-4)  # Slightly lower for DiT fine-tuning
     per_device_train_batch_size: int = field(default=8)
     num_train_epochs: int = field(default=3)

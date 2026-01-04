@@ -63,7 +63,7 @@ To run the training in a container:
 
 2.  **Run (with GPU support)**:
     ```bash
-    docker run --gpus all -v $(pwd)/checkpoints:/app/checkpoints nitrogen-finetuner
+    docker run --gpus all -v $(pwd)/models:/app/models nitrogen-finetuner
     ```
 
 

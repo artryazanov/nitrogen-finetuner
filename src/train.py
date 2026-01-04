@@ -15,6 +15,7 @@ from transformers import TrainingArguments as HFTrainingArguments
 from transformers import (
     set_seed,
 )
+from huggingface_hub import snapshot_download
 
 from src.config import ActionSchema, DataArguments, ModelArguments, TrainingArguments
 from src.data import SlidingWindowDataset, UniversalVectorProcessor
@@ -77,10 +78,31 @@ def main():
     # 2. Load Processor and Model
     logger.info(f"Loading model: {model_args.model_name_or_path}")
 
+    # Ensure models directory exists
+    os.makedirs("models", exist_ok=True)
+    
+    # Determine local path for the model
+    model_name_slug = model_args.model_name_or_path.replace("/", "--")
+    local_model_path = os.path.join("models", model_name_slug)
+
+    if not os.path.exists(local_model_path):
+        logger.info(f"Model not found locally at {local_model_path}. Downloading...")
+        try:
+             snapshot_download(
+                repo_id=model_args.model_name_or_path,
+                local_dir=local_model_path,
+                local_dir_use_symlinks=False
+            )
+        except Exception as e:
+            logger.error(f"Failed to download model: {e}")
+            raise e
+    else:
+        logger.info(f"Model found locally at {local_model_path}.")
+
     # Load separate components if needed, or use AutoProcessor if the hub repo is fully integrated
     try:
         processor = AutoProcessor.from_pretrained(
-            model_args.model_name_or_path,
+            local_model_path,
             trust_remote_code=model_args.trust_remote_code,
         )
     except Exception as e:
@@ -99,7 +121,7 @@ def main():
 
     # We use AutoModel because NitroGen likely doesn't fit a standard task head class like CausalLM perfectly
     model = AutoModel.from_pretrained(
-        model_args.model_name_or_path,
+        local_model_path,
         torch_dtype=torch_dtype,
         trust_remote_code=model_args.trust_remote_code,
         device_map="auto",
