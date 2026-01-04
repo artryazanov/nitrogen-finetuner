@@ -80,7 +80,7 @@ def main():
 
     # Ensure models directory exists
     os.makedirs("models", exist_ok=True)
-    
+
     # Determine local path for the model
     model_name_slug = model_args.model_name_or_path.replace("/", "--")
     local_model_path = os.path.join("models", model_name_slug)
@@ -88,10 +88,10 @@ def main():
     if not os.path.exists(local_model_path):
         logger.info(f"Model not found locally at {local_model_path}. Downloading...")
         try:
-             snapshot_download(
+            snapshot_download(
                 repo_id=model_args.model_name_or_path,
                 local_dir=local_model_path,
-                local_dir_use_symlinks=False
+                local_dir_use_symlinks=False,
             )
         except Exception as e:
             logger.error(f"Failed to download model: {e}")
