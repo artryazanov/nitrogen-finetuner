@@ -1,0 +1,27 @@
+[project]
+name = "nitrogen-finetuner"
+version = "0.1.0"
+description = "Universal Fine-Tuning Pipeline for NVIDIA NitroGen (DiT Architecture)"
+authors = [
+    {name = "Artem Ryazanov", email = "artryazanov@example.com"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "datasets>=2.15.0",
+    "accelerate>=0.25.0",
+    "peft>=0.7.0",
+    "bitsandbytes>=0.41.0",  
+    "wandb>=0.16.0",         
+    "pillow>=10.0.0",
+    "typer>=0.9.0",
+    "scikit-learn>=1.3.0"  # Useful for metrics or utilities
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
