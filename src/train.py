@@ -91,13 +91,25 @@ def main():
             snapshot_download(
                 repo_id=model_args.model_name_or_path,
                 local_dir=local_model_path,
-                local_dir_use_symlinks=False,
             )
+            # Rename ng.pt to pytorch_model.bin if it exists and the bin file doesn't
+            ng_pt_path = os.path.join(local_model_path, "ng.pt")
+            bin_path = os.path.join(local_model_path, "pytorch_model.bin")
+            if os.path.exists(ng_pt_path) and not os.path.exists(bin_path):
+                logger.info("Renaming ng.pt to pytorch_model.bin for AutoModel compatibility.")
+                os.rename(ng_pt_path, bin_path)
         except Exception as e:
             logger.error(f"Failed to download model: {e}")
             raise e
     else:
         logger.info(f"Model found locally at {local_model_path}.")
+        
+    # Ensure compatibility by renaming ng.pt if needed (even if locally found)
+    ng_pt_path = os.path.join(local_model_path, "ng.pt")
+    bin_path = os.path.join(local_model_path, "pytorch_model.bin")
+    if os.path.exists(ng_pt_path) and not os.path.exists(bin_path):
+        logger.info("Renaming ng.pt to pytorch_model.bin for AutoModel compatibility.")
+        os.rename(ng_pt_path, bin_path)
 
     # Load separate components if needed, or use AutoProcessor if the hub repo is fully integrated
     try:
@@ -122,7 +134,7 @@ def main():
     # We use AutoModel because NitroGen likely doesn't fit a standard task head class like CausalLM perfectly
     model = AutoModel.from_pretrained(
         local_model_path,
-        torch_dtype=torch_dtype,
+        dtype=torch_dtype,
         trust_remote_code=model_args.trust_remote_code,
         device_map="auto",
     )
