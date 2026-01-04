@@ -13,3 +13,4 @@ outputs/
 wandb/
 *.parquet
 .idea/
+.venv/

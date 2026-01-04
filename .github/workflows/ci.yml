@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install transformers datasets peft accelerate bitsandbytes scikit-learn
+        pip install pytest pytest-cov
+        # Install the package itself in editable mode if setup.py/pyproject.toml exists
+        if [ -f pyproject.toml ]; then pip install -e .; fi
+        
+    - name: Run Tests
+      run: |
+        # We skip test_data and test_train if they really need GPU or complex env, 
+        # but here we try to run them as they are mocked.
+        # If specific tests fail due to missing libs (like libtorch_global_deps), we might need to handle it.
+        # For now, we try running everything.
+        pytest tests/
