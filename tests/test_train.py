@@ -12,6 +12,8 @@ def test_compute_loss_mse():
     model = MagicMock(spec=torch.nn.Module)
     model.tp_size = 1
     model._modules = {}
+    model.config = MagicMock()
+    model.config.bos_token_id = 0
 
     # Inputs
     batch_size = 2
@@ -21,11 +23,27 @@ def test_compute_loss_mse():
     # Random predictions and targets
     logits = torch.randn(batch_size, horizon, action_dim)
     labels = torch.randn(batch_size, horizon, action_dim)
+    
+    # Mock action_head
+    # compute_loss calls: output = action_head(hidden); output.view(B, H, A)
+    # So action_head should return (B, 1, H*A) or similar such that view works.
+    # We'll just make it return the reshaped logits directly if we mock the side effect, 
+    # OR better: make return value (B, 1, H*A).
+    flat_logits = logits.reshape(batch_size, 1, -1)
+    
+    action_head = MagicMock()
+    action_head.return_value = flat_logits
+    # Mock weight.dtype for the .to() call in compute_loss
+    action_head.weight = MagicMock()
+    action_head.weight.dtype = torch.float32
+    model.action_head = action_head
 
     # Model output mock
     model_output = MagicMock()
     model_output.loss = None
-    model_output.logits = logits
+    # For compute_loss, outputs[0] is hidden states.
+    # We can pass dummy hidden states.
+    model_output.__getitem__ = MagicMock(return_value=torch.randn(batch_size, 1, 1024))
     model.return_value = model_output
 
     # Mock args to avoid eval_strategy check
@@ -70,6 +88,8 @@ def test_compute_loss_internal():
     model = MagicMock(spec=torch.nn.Module)
     model.tp_size = 1
     model._modules = {}
+    model.config = MagicMock()
+    model.config.bos_token_id = 0
 
     # Model output mock with internal loss
     internal_loss = torch.tensor(0.5)
