@@ -1,36 +1,43 @@
 import os
 import sys
+from typing import Any, Dict, Union
+
 import torch
 import torch.nn.functional as F
 import transformers
+from peft import LoraConfig, TaskType, get_peft_model
+from transformers import AutoModel  # Use AutoModel for custom architectures
 from transformers import (
-    AutoModel, # Use AutoModel for custom architectures
     AutoProcessor,
     Trainer,
-    TrainingArguments as HFTrainingArguments,
-    set_seed
 )
-from peft import LoraConfig, get_peft_model, TaskType
-from typing import Dict, Union, Any
+from transformers import TrainingArguments as HFTrainingArguments
+from transformers import (
+    set_seed,
+)
 
-from src.config import ModelArguments, DataArguments, TrainingArguments, ActionSchema
-from src.data import UniversalVectorProcessor, SlidingWindowDataset
+from src.config import ActionSchema, DataArguments, ModelArguments, TrainingArguments
+from src.data import SlidingWindowDataset, UniversalVectorProcessor
+
 
 class DiTTrainer(Trainer):
     """
     Custom Trainer to handle the regression loss for the NitroGen DiT.
     We compute MSE between predicted actions and ground truth actions.
     """
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+
+    def compute_loss(
+        self, model, inputs, return_outputs=False, num_items_in_batch=None
+    ):
         # inputs contains 'pixel_values' and 'actions' (from our SlidingWindowDataset)
-        labels = inputs.pop("actions") # Shape: (B, 16, 21)
-        
+        labels = inputs.pop("actions")  # Shape: (B, 16, 21)
+
         # Forward pass
         # We assume the model's forward signature accepts pixel_values and optionally 'labels' or 'actions'
         # If the model is a standard HF implementation of DiT, it might return a specific output class.
         # We'll treat it generically.
         outputs = model(**inputs)
-        
+
         # If the model computes loss internally, use it.
         # This is common in custom HF models.
         if hasattr(outputs, "loss") and outputs.loss is not None:
@@ -40,18 +47,19 @@ class DiTTrainer(Trainer):
             # If the model returns raw predictions (e.g. logits/pred_actions), compute MSE.
             # We assume output shape is matching (B, 16, 21) or compatible
             logits = outputs.logits if hasattr(outputs, "logits") else outputs[0]
-            
+
             # Regression Loss: MSE
             # Ensure shapes match
             if logits.shape != labels.shape:
-                # This might happen if the model expects different shaping. 
+                # This might happen if the model expects different shaping.
                 # For this implementation, we assume strict compatibility.
                 # In a real debug scenario, we'd log shapes here.
                 pass
-                
+
             loss = F.mse_loss(logits, labels)
 
         return (loss, outputs) if return_outputs else loss
+
 
 def main():
     # 1. Parse Arguments
@@ -63,33 +71,38 @@ def main():
     # Setup Logging
     transformers.utils.logging.set_verbosity_info()
     logger = transformers.utils.logging.get_logger("transformers")
-    
+
     set_seed(42)
 
     # 2. Load Processor and Model
     logger.info(f"Loading model: {model_args.model_name_or_path}")
-    
+
     # Load separate components if needed, or use AutoProcessor if the hub repo is fully integrated
     try:
         processor = AutoProcessor.from_pretrained(
-            model_args.model_name_or_path, 
-            trust_remote_code=model_args.trust_remote_code
+            model_args.model_name_or_path,
+            trust_remote_code=model_args.trust_remote_code,
         )
     except Exception as e:
-        logger.warning(f"Could not load AutoProcessor: {e}. Fallback logic might be needed for image transforms.")
+        logger.warning(
+            f"Could not load AutoProcessor: {e}. Fallback logic might be needed for image transforms."
+        )
         # Minimal Fallback (assuming standard SigLip/ViT transforms)
         from transformers import SiglipImageProcessor
-        processor = SiglipImageProcessor.from_pretrained("google/siglip-base-patch16-224")
+
+        processor = SiglipImageProcessor.from_pretrained(
+            "google/siglip-base-patch16-224"
+        )
 
     # Load Model
     torch_dtype = torch.float16 if train_args_dataclass.fp16 else torch.float32
-    
+
     # We use AutoModel because NitroGen likely doesn't fit a standard task head class like CausalLM perfectly
     model = AutoModel.from_pretrained(
         model_args.model_name_or_path,
         torch_dtype=torch_dtype,
         trust_remote_code=model_args.trust_remote_code,
-        device_map="auto"
+        device_map="auto",
     )
 
     # 3. Apply LoRA
@@ -98,31 +111,40 @@ def main():
         # Target modules: We try to target linear layers in the DiT or ViT.
         # Standard names: q, k, v, proj, fc, dense
         peft_config = LoraConfig(
-            task_type=None, # Custom task
+            task_type=None,  # Custom task
             inference_mode=False,
             r=16,
             lora_alpha=32,
             lora_dropout=0.05,
-            target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "proj_out", "dense"] 
+            target_modules=[
+                "q_proj",
+                "v_proj",
+                "k_proj",
+                "o_proj",
+                "proj_out",
+                "dense",
+            ],
         )
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
 
     # 4. Prepare Dataset
     logger.info(f"Loading dataset: {data_args.dataset_name}")
-    raw_dataset = transformers.datasets.load_dataset(data_args.dataset_name, split="train")
-    
+    raw_dataset = transformers.datasets.load_dataset(
+        data_args.dataset_name, split="train"
+    )
+
     # Initialize our Universal Processor
     vector_processor = UniversalVectorProcessor(deadzone=data_args.analog_deadzone)
-    
+
     # Create Sliding Window Wrapper
     train_window_dataset = SlidingWindowDataset(
         hf_dataset=raw_dataset,
-        image_processor=processor, # Takes RGB PIL -> Tensor
+        image_processor=processor,  # Takes RGB PIL -> Tensor
         processor=vector_processor,
-        horizon=data_args.prediction_horizon
+        horizon=data_args.prediction_horizon,
     )
-    
+
     # Split manually if needed, or just use slice
     # For this demo, we'll just train on the whole thing or a subset
     # eval_dataset = ...
@@ -137,7 +159,7 @@ def main():
         logging_steps=train_args_dataclass.logging_steps,
         save_steps=train_args_dataclass.save_steps,
         fp16=train_args_dataclass.fp16,
-        remove_unused_columns=False, # Critical for custom Datasets returning unknown keys like 'actions'
+        remove_unused_columns=False,  # Critical for custom Datasets returning unknown keys like 'actions'
         report_to="wandb",
         run_name="nitrogen-finetuner-dit",
         # Custom collator might be needed to stack tensors
@@ -157,6 +179,7 @@ def main():
     # 7. Save
     logger.info("Saving...")
     trainer.save_model(os.path.join(train_args_dataclass.output_dir, "final_model"))
+
 
 if __name__ == "__main__":
     main()

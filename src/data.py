@@ -1,15 +1,19 @@
-import torch
+from typing import Any, Dict, List, Optional
+
 import numpy as np
-from torch.utils.data import Dataset
+import torch
 from datasets import load_dataset
-from typing import Dict, Any, List, Optional
+from torch.utils.data import Dataset
+
 from src.config import ActionSchema
+
 
 class UniversalVectorProcessor:
     """
     Transforms raw dataset rows (booleans/lists) into a (21,) float tensor
     adhering to the NitroGen DiT spec.
     """
+
     def __init__(self, deadzone: float = 0.05):
         self.deadzone = deadzone
 
@@ -44,22 +48,26 @@ class UniversalVectorProcessor:
 
         return vector
 
+
 class SlidingWindowDataset(Dataset):
     """
     Wraps a Hugging Face dataset to provide a sliding window of actions.
     Input: Image at index t
     Target: Actions at indices [t ... t + horizon]
     """
-    def __init__(self, 
-                 hf_dataset, 
-                 image_processor, 
-                 processor: UniversalVectorProcessor, 
-                 horizon: int = 16):
+
+    def __init__(
+        self,
+        hf_dataset,
+        image_processor,
+        processor: UniversalVectorProcessor,
+        horizon: int = 16,
+    ):
         self.dataset = hf_dataset
         self.image_processor = image_processor
         self.processor = processor
         self.horizon = horizon
-        
+
         # We can't use the last (horizon - 1) frames as start points
         self.valid_length = len(hf_dataset) - horizon + 1
 
@@ -71,10 +79,12 @@ class SlidingWindowDataset(Dataset):
         # We access the raw dataset row
         current_row = self.dataset[idx]
         image = current_row["image"].convert("RGB")
-        
+
         # Process image using the model's image processor (SigLip)
         if self.image_processor:
-            pixel_values = self.image_processor(image, return_tensors="pt").pixel_values.squeeze(0)
+            pixel_values = self.image_processor(
+                image, return_tensors="pt"
+            ).pixel_values.squeeze(0)
         else:
             # Fallback (should not happen if generic processor provided)
             raise ValueError("Image processor required for SigLip encoding")
@@ -83,34 +93,37 @@ class SlidingWindowDataset(Dataset):
         # We need to slice the dataset. HF Datasets support slicing efficiently.
         # slice_rows is a dict of lists: {'south': [val, val...], 'image': [...]}
         window_rows_dict = self.dataset[idx : idx + self.horizon]
-        
+
         # We need to convert this "columnar" slice back to "row" format for our processor
-        # Or optimize the processor to handle batches. 
+        # Or optimize the processor to handle batches.
         # For clarity/safety, we reconstruct rows.
         actions_list = []
         for i in range(self.horizon):
             # Reconstruct single row dict for the processor
-            row_snapshot = {k: window_rows_dict[k][i] for k in window_rows_dict if k != "image"}
+            row_snapshot = {
+                k: window_rows_dict[k][i] for k in window_rows_dict if k != "image"
+            }
             action_vec = self.processor.get_vector(row_snapshot)
             actions_list.append(action_vec)
-            
+
         # Stack into (16, 21) tensor
         actions_tensor = torch.stack(actions_list)
-        
+
         return {
             "pixel_values": pixel_values,
-            "actions": actions_tensor # Model expects 'actions' key usually, or 'labels' depending on implementation
+            "actions": actions_tensor,  # Model expects 'actions' key usually, or 'labels' depending on implementation
         }
+
 
 if __name__ == "__main__":
     # verification mock
     print("Testing UniversalVectorProcessor...")
     proc = UniversalVectorProcessor()
-    mock_row = {"south": True, "j_left": [0.55, -0.01]} # -0.01 should be deadzoned
+    mock_row = {"south": True, "j_left": [0.55, -0.01]}  # -0.01 should be deadzoned
     vec = proc.get_vector(mock_row)
-    print(f"Shape: {vec.shape}") # Should be (21,)
-    print(f"South (idx 4): {vec[4]}") # Should be 1.0
-    print(f"L_Stick X (idx 0): {vec[0]}") # Should be 0.55
-    print(f"L_Stick Y (idx 1): {vec[1]}") # Should be 0.0 (deadzone)
+    print(f"Shape: {vec.shape}")  # Should be (21,)
+    print(f"South (idx 4): {vec[4]}")  # Should be 1.0
+    print(f"L_Stick X (idx 0): {vec[0]}")  # Should be 0.55
+    print(f"L_Stick Y (idx 1): {vec[1]}")  # Should be 0.0 (deadzone)
     assert vec.shape == (21,)
     print("Test Passed!")
