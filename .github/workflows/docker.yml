@@ -16,6 +16,12 @@ jobs:
       uses: jlumbroso/free-disk-space-action@v1.3.1
       with:
         tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: false
     
     - name: Build Docker Image
       run: |
