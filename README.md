@@ -52,6 +52,23 @@ pytest
 pytest --cov=src
 ```
 
+## 🧹 Linting
+
+The project uses `black` for code formatting and `isort` for import sorting.
+
+```bash
+# Install linting tools
+pip install black isort
+
+# Run formatters
+black .
+isort --profile black .
+
+# Check formatting (CI mode)
+black --check .
+isort --check-only --profile black .
+```
+
 ### 🐳 Docker Usage
 
 To run the training in a container:
@@ -81,7 +98,7 @@ This project is part of a larger ecosystem for training AI agents on retro games
 1.  **Export**: It runs a Lua script inside the **[BizHawk](https://tasvideos.org/BizHawk)** emulator to record gameplay frames and controller inputs from `.bk2` movie files.
 2.  **Convert**: A Python script processes this raw data into the required Parquet format (images embedded + action vectors).
 
-This toolchain ensures that images are pre-processed (cropped/padded to 256x256) and actions are correctly mapped for the `UniversalVectorProcessor`.
+This toolchain ensures that images are pre-processed (cropped/padded to 256x256) and actions are correctly mapped.
 
 ## 📊 Dataset Requirements
 The pipeline expects a Hugging Face dataset (parquet) with columns matching standard gamepad inputs:
@@ -89,7 +106,7 @@ The pipeline expects a Hugging Face dataset (parquet) with columns matching stan
 - `south`, `east`, `north`, `west`, etc. (Booleans).
 - `j_left`, `j_right` (Vector/float sequences for sticks).
 
-The `UniversalVectorProcessor` will automatically map these fields to the 21-dim architecture.
+The `NitrogenTokenizer` will automatically map these fields to the 21-dim architecture used by the model.
 
 ## 📝 License
 

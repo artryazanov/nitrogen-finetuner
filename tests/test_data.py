@@ -1,72 +1,11 @@
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 import torch
 
 from src.config import ActionSchema
-from src.data import SlidingWindowDataset, UniversalVectorProcessor
-
-# --- UniversalVectorProcessor Tests ---
-
-
-def test_processor_deadzone():
-    """Test deadzone application in UniversalVectorProcessor."""
-    processor = UniversalVectorProcessor(deadzone=0.1)
-
-    # Value inside deadzone should be 0.0
-    assert processor._apply_deadzone(0.05) == 0.0
-    assert processor._apply_deadzone(-0.05) == 0.0
-
-    # Value outside deadzone should remain
-    assert processor._apply_deadzone(0.15) == 0.15
-    assert processor._apply_deadzone(-0.15) == -0.15
-
-
-def test_processor_get_vector_sticks():
-    """Test stick vectorization."""
-    processor = UniversalVectorProcessor(deadzone=0.0)
-
-    row = {"j_left": [0.5, -0.5], "j_right": [0.1, 0.9]}
-    vector = processor.get_vector(row)
-
-    assert vector[ActionSchema.L_STICK_X] == 0.5
-    assert vector[ActionSchema.L_STICK_Y] == -0.5
-    assert vector[ActionSchema.R_STICK_X] == 0.1
-    assert vector[ActionSchema.R_STICK_Y] == 0.9
-
-
-def test_processor_get_vector_buttons():
-    """Test button vectorization."""
-    processor = UniversalVectorProcessor()
-
-    # Buttons from config.py: south, east, etc.
-    # Let's press 'south' and 'start'
-    row = {"south": True, "start": True, "east": False}
-    vector = processor.get_vector(row)
-
-    # Calculate expected indices
-    south_idx = ActionSchema.BUTTON_START_IDX + ActionSchema.BUTTON_ORDER.index("south")
-    start_idx = ActionSchema.BUTTON_START_IDX + ActionSchema.BUTTON_ORDER.index("start")
-
-    assert vector[south_idx] == 1.0
-    assert vector[start_idx] == 1.0
-
-    # Verify a non-pressed button
-    east_idx = ActionSchema.BUTTON_START_IDX + ActionSchema.BUTTON_ORDER.index("east")
-    assert vector[east_idx] == 0.0
-
-
-def test_processor_missing_keys():
-    """Test behavior when keys are missing from the row."""
-    processor = UniversalVectorProcessor()
-    row = {}
-    vector = processor.get_vector(row)
-
-    assert vector.shape == (21,)
-    assert torch.all(vector == 0.0)
-
-
-# --- SlidingWindowDataset Tests ---
+from src.data import SlidingWindowDataset
 
 
 @pytest.fixture
@@ -74,16 +13,29 @@ def mock_image_processor():
     processor = MagicMock()
     # Mock return value of processor(image, return_tensors="pt")
     mock_output = MagicMock()
+    # Batch size 1, channels 3, 224x224
     mock_output.pixel_values = torch.randn(1, 3, 224, 224)
     processor.return_value = mock_output
     return processor
 
 
 @pytest.fixture
+def mock_tokenizer():
+    tokenizer = MagicMock()
+    # Mock encode return value
+    # NitrogenTokenizer.encode returns a dict of tensors/arrays
+    tokenizer.encode.return_value = {
+        "visual_tokens": torch.randint(0, 1000, (1, 256)),
+        "action_tokens": torch.randint(0, 100, (1, 16)),
+        "actions": torch.randn(1, 16, 21),  # (Batch, Horizon, Dim)
+    }
+    return tokenizer
+
+
+@pytest.fixture
 def mock_dataset():
     # Create a dummy list-based dataset
     # We need enough items for a horizon
-    horizon = 4
     num_samples = 10
 
     data = []
@@ -92,9 +44,9 @@ def mock_dataset():
             "image": MagicMock(),  # Mock PIL image
             "south": True if i % 2 == 0 else False,  # Alternate button press
             "j_left": [float(i) / num_samples, 0.0],
+            # Add j_right and other buttons if necessary for dataset logic,
+            # or rely on get_col default values in SlidingWindowDataset
         }
-        # Add other required button keys with False to avoid KeyErrors if the code expects them?
-        # The code uses row.get(button_name, False), so missing keys are fine.
         data.append(item)
 
     # The dataset needs to support slicing [start:end] -> returns dict of lists
@@ -109,6 +61,8 @@ def mock_dataset():
             if isinstance(idx, slice):
                 # Return dict of lists
                 sliced_data = self.data[idx]
+                if not sliced_data:
+                    return {}
                 keys = sliced_data[0].keys()
                 result = {k: [d[k] for d in sliced_data] for k in keys}
                 return result
@@ -118,13 +72,13 @@ def mock_dataset():
     return MockHFDataset(data)
 
 
-def test_sliding_window_len(mock_dataset, mock_image_processor):
+def test_sliding_window_len(mock_dataset, mock_image_processor, mock_tokenizer):
     """Test dataset length calculation."""
     horizon = 4
     dataset = SlidingWindowDataset(
         hf_dataset=mock_dataset,
         image_processor=mock_image_processor,
-        processor=UniversalVectorProcessor(),
+        tokenizer=mock_tokenizer,
         horizon=horizon,
     )
 
@@ -133,25 +87,32 @@ def test_sliding_window_len(mock_dataset, mock_image_processor):
     assert len(dataset) == 7
 
 
-def test_sliding_window_getitem(mock_dataset, mock_image_processor):
+def test_sliding_window_getitem(mock_dataset, mock_image_processor, mock_tokenizer):
     """Test getting an item returns correct shapes."""
     horizon = 4
     dataset = SlidingWindowDataset(
         hf_dataset=mock_dataset,
         image_processor=mock_image_processor,
-        processor=UniversalVectorProcessor(),
+        tokenizer=mock_tokenizer,
         horizon=horizon,
     )
 
     item = dataset[0]
 
-    # Check keys
-    assert "pixel_values" in item
-    assert "actions" in item
+    # Verify tokenizer.encode was called with correct structure
+    mock_tokenizer.encode.assert_called_once()
+    call_args = mock_tokenizer.encode.call_args[0][0]  # First arg is 'data' dict
 
-    # Check shapes
-    # pixel_values comes from mock_image_processor: (1, 3, 224, 224) -> squeezed to (3, 224, 224)
-    assert item["pixel_values"].shape == (3, 224, 224)
+    # Check data dict keys passed to tokenizer
+    assert "frames" in call_args
+    assert "buttons" in call_args
+    assert "j_left" in call_args
+    assert "j_right" in call_args
 
-    # actions: (horizon, 21)
-    assert item["actions"].shape == (horizon, 21)
+    # Check actions shape passed to tokenizer
+    # buttons should be (1, Horizon, NumButtons)
+    assert call_args["buttons"].shape == (1, horizon, 17)  # 17 buttons in ActionSchema
+
+    # Check item returned by dataset (should be whatever tokenizer returned)
+    assert "visual_tokens" in item
+    assert "action_tokens" in item
