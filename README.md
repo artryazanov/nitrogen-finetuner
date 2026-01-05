@@ -80,16 +80,17 @@ To run the training in a container:
 
 2.  **Run (with GPU support)**:
     ```bash
-    docker run --gpus all -v $(pwd)/models:/app/models nitrogen-finetuner
+    docker run --gpus all \
+      -v $(pwd)/models:/app/models \
+      -v $(pwd)/datasets:/app/datasets \
+      nitrogen-finetuner
     ```
-
 
 ### Configuration
 Hyperparameters are defined in `src/config.py`. You can adjust:
 - `dataset_name`: The Hugging Face dataset ID.
 - `prediction_horizon`: How many future frames to predict (Default: 16).
 - `analog_deadzone`: The threshold for filtering stick noise.
-
 
 ## 🛠️ NitroGen/BizHawk Toolchain
 

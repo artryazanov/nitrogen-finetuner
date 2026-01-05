@@ -149,9 +149,26 @@ def main():
         model.print_trainable_parameters()
 
     # 4. Prepare Dataset
+    # 4. Prepare Dataset
     logger.info(f"Loading dataset: {data_args.dataset_name}")
+
+    # Ensure datasets directory exists
+    os.makedirs("datasets", exist_ok=True)
+    dataset_name_slug = data_args.dataset_name.replace("/", "--")
+    local_dataset_path = os.path.join("datasets", dataset_name_slug)
+
     try:
-        raw_dataset = datasets.load_dataset(data_args.dataset_name, split="train")
+        if os.path.exists(local_dataset_path):
+            logger.info(
+                f"Dataset found locally at {local_dataset_path}. Loading from disk..."
+            )
+            raw_dataset = datasets.load_from_disk(local_dataset_path)
+        else:
+            logger.info(f"Dataset not found locally. Downloading from Hub...")
+            raw_dataset = datasets.load_dataset(data_args.dataset_name, split="train")
+            logger.info(f"Saving dataset to {local_dataset_path}...")
+            raw_dataset.save_to_disk(local_dataset_path)
+
     except Exception as e:
         logger.warning(f"Failed to load dataset normally: {e}")
         raise e

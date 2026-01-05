@@ -4,8 +4,9 @@ FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 # Set working directory
 WORKDIR /app
 
-# Expose models volume
+# Expose models and datasets volume
 VOLUME /app/models
+VOLUME /app/datasets
 
 # Install system dependencies
 ENV DEBIAN_FRONTEND=noninteractive
