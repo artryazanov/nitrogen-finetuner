@@ -40,6 +40,23 @@ To start fine-tuning:
 python src/train.py
 ```
 
+### 🐳 Docker Usage
+
+To run the training in a container:
+
+1.  **Build**:
+    ```bash
+    docker build -t nitrogen-finetuner .
+    ```
+
+2.  **Run (with GPU support)**:
+    ```bash
+    docker run --gpus all \
+      -v $(pwd)/models:/app/models \
+      -v $(pwd)/datasets:/app/datasets \
+      nitrogen-finetuner
+    ```
+
 ## 🧪 Running Tests
 
 To run the test suite:
@@ -68,23 +85,6 @@ isort --profile black .
 black --check .
 isort --check-only --profile black .
 ```
-
-### 🐳 Docker Usage
-
-To run the training in a container:
-
-1.  **Build**:
-    ```bash
-    docker build -t nitrogen-finetuner .
-    ```
-
-2.  **Run (with GPU support)**:
-    ```bash
-    docker run --gpus all \
-      -v $(pwd)/models:/app/models \
-      -v $(pwd)/datasets:/app/datasets \
-      nitrogen-finetuner
-    ```
 
 ### Configuration
 Hyperparameters are defined in `src/config.py`. You can adjust:
