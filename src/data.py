@@ -7,8 +7,6 @@ from torch.utils.data import Dataset
 
 from src.config import ActionSchema
 
-# Note: UniversalVectorProcessor is replaced by NitrogenTokenizer logic
-
 
 class SlidingWindowDataset(Dataset):
     """
@@ -73,7 +71,6 @@ class SlidingWindowDataset(Dataset):
             pass
         # Basic check
         if j_left.shape != (self.horizon, 2):
-            # Try to fix?
             # Assuming dataset is correct for now
             pass
 

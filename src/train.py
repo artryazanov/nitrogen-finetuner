@@ -149,7 +149,6 @@ def main():
         model.print_trainable_parameters()
 
     # 4. Prepare Dataset
-    # 4. Prepare Dataset
     logger.info(f"Loading dataset: {data_args.dataset_name}")
 
     # Ensure datasets directory exists
@@ -188,7 +187,6 @@ def main():
     tokenizer = NitrogenTokenizer(tokenizer_cfg)
 
     # Create Sliding Window Wrapper
-    # NOTE: UniversalVectorProcessor is no longer needed as NitrogenTokenizer handles action encoding
     train_window_dataset = SlidingWindowDataset(
         hf_dataset=raw_dataset,
         image_processor=image_processor,
